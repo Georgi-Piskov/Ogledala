@@ -85,7 +85,7 @@ h3 .sp{flex:1}
   <button class="btn dm" id="bZones" title="Показва обхвата на огледалата и свещниците и препятствията само на твоя екран (Z)">◔ Обхват</button>
   <button class="btn" id="bFit" title="Събери картата в екрана (0)">⤢ Събери</button>
   <button class="btn dm" id="bUndo" title="Една стъпка назад (Ctrl+Z)" disabled>↶ Назад</button>
-  <button class="btn" id="bPtr" title="Сочи по картата — другите виждат показалеца ти (P). Задържане или двоен клик на празно място пуска сигнал.">☝ Сочи</button>
+  <button class="btn" id="bPtr" title="Сочи (P): кликни или влачи по картата — показалецът ти остава там, докато не кликнеш върху него. Задържане или двоен клик на празно място също го слага.">☝ Сочи</button>
   <button class="btn" id="bSpell" title="Форми за магии: кръг, конус, куб, линия (M)">✦ Магии</button>
   <select id="meSel" class="pl" title="Кой си ти — показалецът и магиите ти носят това име и цвят"></select>
   <span class="sp"></span>
@@ -123,7 +123,7 @@ h3 .sp{flex:1}
   <input id="plink" readonly>
   <div style="display:flex;gap:6px"><button class="btn sm" data-act="copyLink">Копирай адреса</button><a class="btn sm" id="plinkA" target="_blank" rel="noopener" style="text-decoration:none">Отвори</a></div>
   <h3>Клавиши</h3>
-  <div class="note"><b>Влачи</b> пулче, огледало или свещник. Избраното огледало се върти с кръглата дръжка или с <b>Q / E</b>. <b>Двоен клик</b>: свещник — гаси/пали, огледало — покрива/открива. <b>Delete</b> маха избраното. <b>Alt</b> при пускане — без залепване. <b>P</b> — сочи; <b>задържане</b> или двоен клик на празно място — сигнал; <b>M</b> — форми за магии; <b>Esc</b> — отказ.</div>
+  <div class="note"><b>Влачи</b> пулче, огледало или свещник. Избраното огледало се върти с кръглата дръжка или с <b>Q / E</b>. <b>Двоен клик</b>: свещник — гаси/пали, огледало — покрива/открива. <b>Delete</b> маха избраното. <b>Alt</b> при пускане — без залепване. <b>P</b> — сочи (показалецът остава, докато не кликнеш върху него; ти махаш и чуждите); <b>задържане</b> или двоен клик на празно място също го слага; <b>M</b> — форми за магии; <b>Esc</b> — отказ.</div>
   <button class="btn danger" data-act="reset" id="bReset">Нулирай залата</button>
   <div class="note" id="netInfo" style="margin-top:12px;font:11px/1.45 ui-monospace,monospace"></div>
 </aside>
@@ -132,7 +132,7 @@ h3 .sp{flex:1}
   <div class="sr" id="spZ"></div>
   <div class="sr" id="spC"></div>
   <div class="sh">Избери форма и кликни на картата. Влачи точката, за да я местиш; дръжката в края сменя посоката и размера. Пусната върху герой, формата тръгва с него.</div>
-  <div class="sr"><button class="btn sm danger dm" id="spClr">Изчисти всички форми</button></div>
+  <div class="sr"><button class="btn sm danger dm" id="spClr">Изчисти всички форми</button><button class="btn sm dm" id="ptClr">Махни показалците</button></div>
 </div>
 <div id="toast"></div>
 <div id="warn" style="position:fixed;left:50%;top:56px;transform:translateX(-50%);z-index:9;display:none;max-width:86vw;background:#2a1a10f2;border:1px solid #a8702a;border-radius:10px;padding:9px 14px;font:600 13px/1.4 system-ui,sans-serif;color:#ffd9a0;text-align:center"></div>
@@ -294,7 +294,7 @@ function pgMsg(topic,payload){ let m; try{ m=JSON.parse(payload.toString()); }ca
   if(t==='state') pgState(m);
   else if(t==='act'){ NS.rx.act++; onMsg(m); }
   else if(t==='dm'){ if(m&&m.cid&&m.cid!==CID){ NS.rx.dm++; seePeer(m.cid,m.act); } }
-  else if(t==='ptr'){ if(m&&m.cid&&m.cid!==CID) ptrIn(m); }
+  else if(t==='ptr'){ if(m&&m.cid&&(m.cid!==CID||(m.x===null&&m.by&&m.by!==CID))) ptrIn(m); }
   else if(t==='ping'){ if(m&&m.id&&m.cid!==CID) pingIn(m); }
   else if(t==='drag'){ if(!m||!m.cid||m.cid===CID) return; NS.rx.peers++; if(m.d){ LASTID[m.cid]=m.d.id; remoteDrag(m.d); } else dropRemote(m.cid); } }
 function pgUp(){ netLabel(); if(IS_PLAYER){ setTimeout(()=>{ if(!PG.got) warn('Водещият още не е отворил играта. Щом я отвори, картата ще се появи сама.'); },4500); return; }
@@ -729,6 +729,7 @@ function hitTest(wx,wy){
   L.sort((a,b)=>b.y-a.y);
   for(const q of L) if(baseHit(q,wx,wy)) return {kind:q.kind,id:q.o.id};
   { const Ls=SH(); for(let i=Ls.length-1;i>=0;i--){ const o=Ls[i], gp=gripPos(o,shGeom(o)); if(Math.hypot(wx-gp[0],wy-gp[1])<=gripR()*1.4) return {kind:'s',id:o.id,part:'grip'}; } }
+  for(const k in PTRS){ if(IS_PLAYER&&k!==CID) continue; const pp=PTRS[k]; if(Math.hypot(wx-pp.x,wy-pp.y)<=ptrR()*1.6) return {kind:'p',id:k}; }
   for(const q of L) if(bodyHit(q,wx,wy)) return {kind:q.kind,id:q.o.id};
   return null; }
 /* огледало, в което може да се влезе от тази точка (strict — за убиец, влачен по пода) */
@@ -745,8 +746,9 @@ function toggleCover(id){ const m=find('m',id); if(!m) return; if(IS_PLAYER){ if
 function toggleLit(id){ const c=find('c',id); if(!c) return; if(IS_PLAYER){ sendAct({k:'lit',kind:'c',id,lit:!c.lit}); } else { c.lit=!c.lit; save(); syncSide(true); } }
 cv.addEventListener('pointerdown',e=>{ if(e.button>0) return; try{ cv.setPointerCapture(e.pointerId); }catch(x){} touch(); const [wx,wy]=toWorld(e.clientX,e.clientY);
   if(TOOL&&TOOL.place){ if(canTouch('s')){ snapHist(true); placeShape(TOOL.place,wx,wy,e.altKey); } setTool(null); return; }
-  if(TOOL==='ptr'){ drag={k:'ptr'}; ptrSend(wx,wy,true); return; }
+  if(TOOL==='ptr'){ const mine=PTRS[CID]; if(mine&&Math.hypot(wx-mine.x,wy-mine.y)<=ptrR()*1.6){ ptrRemove(CID); return; } drag={k:'ptr'}; ptrSend(wx,wy,true); return; }
   const hit=hitTest(wx,wy);
+  if(hit&&hit.kind==='p'){ ptrRemove(hit.id); return; }
   if(hit&&hit.kind==='s'&&canTouch('s')){ snapHist(true); if(hit.part==='del'){ delShape(hit.id); return; } sel={kind:'s',id:hit.id}; const o=find('s',hit.id), g=shGeom(o);
     drag=hit.part==='tip'?{k:'stip',id:hit.id}:{k:'obj',kind:'s',id:hit.id,ox:wx-g.x,oy:wy-g.y,moved:false,tgt:null,sx:e.clientX,sy:e.clientY}; syncSpellUI(); camAnim=null; if(!IS_PLAYER) markSel(); return; }
   if(hit&&canTouch(hit.kind)){ snapHist(true); sel={kind:hit.kind,id:hit.id}; if(hit.badge) drag={k:'badge',id:hit.id,x:wx,y:wy,sx:e.clientX,sy:e.clientY,moved:false,tgt:null}; else if(hit.rot) drag={k:'rot',kind:'m',id:hit.id}; else { const o=find(hit.kind,hit.id), p=P(o); drag={k:'obj',kind:hit.kind,id:hit.id,ox:wx-p.x,oy:wy-p.y,moved:false,tgt:null}; } }
@@ -755,23 +757,22 @@ cv.addEventListener('pointerdown',e=>{ if(e.button>0) return; try{ cv.setPointer
     const dd=drag; if(!hit) dd.lp=setTimeout(()=>{ if(drag===dd&&!dd.far&&!pinch){ drag=null; cv.classList.remove('grabbing'); ping(wx,wy); } },550); }
   camAnim=null; if(!IS_PLAYER) markSel(); });
 cv.addEventListener('pointermove',e=>{ const [wx,wy]=toWorld(e.clientX,e.clientY);
-  if(TOOL==='ptr'&&(e.pointerType==='mouse'||(drag&&drag.k==='ptr'))){ ptrSend(wx,wy); if(drag&&drag.k==='ptr') return; }
   if(!drag) return;
+  if(drag.k==='ptr'){ ptrSend(wx,wy); return; }
   if(drag.k==='pan'){ if(Math.hypot(e.clientX-drag.sx,e.clientY-drag.sy)>6) drag.far=true; if(drag.far){ cam.x=drag.cx+(e.clientX-drag.sx); cam.y=drag.cy+(e.clientY-drag.sy); userMoved=true; } }
   else if(drag.k==='stip'){ const o=find('s',drag.id); if(!o) return; const g=shGeom(o), v={z:clamp(Math.round(Math.hypot(wx-g.x,wy-g.y)/ftpx(5))*5,5,300)}; if(o.t!=='c'){ let a=Math.atan2(wy-g.y,wx-g.x); if(!e.altKey){ const st=Math.PI/12; a=Math.round(a/st)*st; } v.a=a; } shapeSet(o.id,v); }
   else if(drag.k==='obj'&&drag.kind==='s'){ if(!drag.moved&&Math.hypot(e.clientX-drag.sx,e.clientY-drag.sy)<5) return; drag.moved=true; shapeSet(drag.id,{x:clamp(wx-drag.ox,0,W),y:clamp(wy-drag.oy,0,H),at:null}); drag.tgtH=heroAt(wx-drag.ox,wy-drag.oy); }
   else if(drag.k==='rot'){ const m=find('m',drag.id); if(!m) return; const p=P(m); let a=Math.atan2(wy-p.y,wx-p.x); const st=Math.PI/36; a=Math.round(a/st)*st; applyMove('m',drag.id,{a}); }
   else if(drag.k==='badge'){ drag.x=wx; drag.y=wy; if(Math.hypot(e.clientX-drag.sx,e.clientY-drag.sy)>5) drag.moved=true; drag.tgt=drag.moved?entryMirror(wx,wy,false):null; }
   else { drag.moved=true; applyMove(drag.kind,drag.id,{x:clamp(wx-drag.ox,0,W),y:clamp(wy-drag.oy,0,H)}); if(drag.kind==='f'){ const f=find('f',drag.id); drag.tgt=f&&f.mw?entryMirror(wx,wy,true):null; } } });
-function endDrag(e){ if(!drag) return; cv.classList.remove('grabbing'); const d=drag; drag=null; if(d.lp) clearTimeout(d.lp); if(d.k==='ptr'){ if(!(e&&e.pointerType==='mouse')) ptrEnd(); return; } if(d.k!=='pan') livePres(null);
+function endDrag(e){ if(!drag) return; cv.classList.remove('grabbing'); const d=drag; drag=null; if(d.lp) clearTimeout(d.lp); if(d.k==='ptr') return; if(d.k!=='pan') livePres(null);
   if(d.k==='stip'){ shapeSet(d.id,{},true); return; }
   if(d.k==='obj'&&d.kind==='s'){ const o=find('s',d.id); if(!o||!d.moved) return; const g=shGeom(o); if(d.tgtH){ const hp=P(d.tgtH); shapeSet(d.id,{x:hp.x,y:hp.y,at:d.tgtH.id},true); } else { let x=g.x,y=g.y; if(!(e&&e.altKey)) [x,y]=snapHalf(x,y); shapeSet(d.id,{x,y,at:null},true); } return; }
   if(d.k==='badge'){ const f=find('f',d.id); if(!f||!d.moved) return; if(d.tgt){ if(d.tgt.id!==f.inM) enterMirror(f,d.tgt); } else exitMirror(f,d.x,d.y); return; }
   if(d.k==='obj'){ const o=find(d.kind,d.id); if(!o) return; if(d.kind==='f'&&d.tgt&&o.mw){ enterMirror(o,d.tgt); return; } const p=P(o); let x=p.x,y=p.y; if(d.moved&&(d.kind==='h'||d.kind==='f')&&S.cfg.snap&&!(e&&e.altKey)) [x,y]=snapXY(x,y,d.kind==='f'&&o.big); if(d.moved) applyMove(d.kind,d.id,{x,y},true); }
   else if(d.k==='rot'){ const m=find('m',d.id); if(m) applyMove('m',d.id,{a:P(m).a},true); } }
 cv.addEventListener('pointerup',endDrag); cv.addEventListener('pointercancel',endDrag);
-cv.addEventListener('pointerleave',()=>{ if(TOOL==='ptr'&&!drag) ptrEnd(); });
-cv.addEventListener('dblclick',e=>{ const [wx,wy]=toWorld(e.clientX,e.clientY); const hit=hitTest(wx,wy); if(!hit){ if(!TOOL) ping(wx,wy); return; } if(hit.badge||hit.kind==='s'||!canTouch(hit.kind)) return; if(hit.kind==='c') toggleLit(hit.id); else if(hit.kind==='m') toggleCover(hit.id); });
+cv.addEventListener('dblclick',e=>{ const [wx,wy]=toWorld(e.clientX,e.clientY); const hit=hitTest(wx,wy); if(!hit){ if(!TOOL) ping(wx,wy); return; } if(hit.badge||hit.kind==='s'||hit.kind==='p'||!canTouch(hit.kind)) return; if(hit.kind==='c') toggleLit(hit.id); else if(hit.kind==='m') toggleCover(hit.id); });
 cv.addEventListener('wheel',e=>{ e.preventDefault(); const [wx,wy]=toWorld(e.clientX,e.clientY); const ns=clamp(cam.s*Math.exp(-e.deltaY*.0012),.08,8); cam.x=e.clientX-wx*ns; cam.y=e.clientY-wy*ns; cam.s=ns; userMoved=true; camAnim=null; },{passive:false});
 let pinch=null; cv.addEventListener('touchstart',e=>{ if(e.touches.length===2){ pinch={d:Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY),s:cam.s}; drag=null; } },{passive:true});
 cv.addEventListener('touchmove',e=>{ if(pinch&&e.touches.length===2){ const d=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY); const cx=(e.touches[0].clientX+e.touches[1].clientX)/2, cy=(e.touches[0].clientY+e.touches[1].clientY)/2; const [wx,wy]=toWorld(cx,cy); const ns=clamp(pinch.s*d/pinch.d,.08,8); cam.x=cx-wx*ns; cam.y=cy-wy*ns; cam.s=ns; userMoved=true; } },{passive:true});
@@ -815,8 +816,13 @@ function tipPos(g){ return g.t==='c'?[g.x+g.L,g.y]:[g.x+g.dx*g.L,g.y+g.dy*g.L]; 
 function delPos(g){ const d=handleR()*3.2, dx=g.t==='c'?1:g.dx, dy=g.t==='c'?0:g.dy; return [g.x-dx*d,g.y-dy*d]; }
 function heroAt(x,y){ let best=null,bd=1e9; S.heroes.forEach(h=>{ if(h.out) return; const p=P(h), d=Math.hypot(x-p.x,y-p.y); if(d<=figGeom(h.id).rB*1.15&&d<bd){ bd=d; best=h; } }); return best; }
 function snapHalf(x,y){ const g=cell()/2; return [Math.round(x/g)*g,Math.round(y/g)*g]; }   /* ъгъл или център на клетка */
-function drawShapes(now){ const list=SH(); if(!list.length) return; const cs=cell(), labs=[];
-  if(IS_PLAYER){ const t=Date.now(); for(let i=list.length-1;i>=0;i--) if(list[i]._p&&t-list[i]._p>6000) list.splice(i,1); }
+const PENDS=[];
+function drawShapes(now){ const list=SH(); if(!list.length&&!PENDS.length) return; const cs=cell(), labs=[];
+  if(IS_PLAYER) for(let i=PENDS.length-1;i>=0;i--){ const q=PENDS[i], cur=find('s',q.o.id), t=Date.now();
+    if(cur&&!cur._p){ PENDS.splice(i,1); continue; }
+    if(t-q.t0>60000){ PENDS.splice(i,1); if(cur) list.splice(list.indexOf(cur),1); toast('Формата не се записа — екранът на Водещия трябва да е отворен и презареден.'); continue; }
+    if(!cur) list.push(Object.assign({_p:1},q.o));
+    if(t-q.tr>4000){ q.tr=t; sendAct({k:'sadd',s:q.o}); if(!q.w){ q.w=1; toast('Формата чака екрана на Водещия…'); } } }
   list.forEach(o=>{ const g=shGeom(o), col=(SPC[o.c]||SPC[0])[1], v=shCells(o,g);
     ctx.save(); ctx.fillStyle=col; ctx.globalAlpha=.12; const pad=1.2/cam.s; for(let i=0;i<v.length;i+=2) ctx.fillRect(v[i]*cs+pad,v[i+1]*cs+pad,cs-2*pad,cs-2*pad);
     shPath(g); ctx.globalAlpha=.19+.04*Math.sin(now/650+hsh(o.id)*6); ctx.fill();
@@ -836,16 +842,16 @@ function drawShapeSel(o,now){ const g=shGeom(o), hr=handleR(), tp=tipPos(g), dp=
     ctx.beginPath(); ctx.arc(dp[0],dp[1],hr*.85,0,7); ctx.fillStyle='#3a1414'; ctx.fill(); ctx.strokeStyle='#ff9c8f'; ctx.stroke(); ctx.fillStyle='#ff9c8f'; ctx.fillText('✕',dp[0],dp[1]+hr*.06); }
   ctx.restore(); if(drag&&(drag.k==='stip'||(drag.k==='obj'&&drag.kind==='s'))) label((SPT[o.t]||'')+' '+g.z+' ф'+(drag.tgtH?' → върви с '+drag.tgtH.name:''),tp[0],tp[1]-hr*2.6,'#fff'); }
 function shapeSet(id,v,fin){ const o=find('s',id); if(!o) return; const cur=PS(o);
-  if(IS_PLAYER){ const pv=OV[id], lat=(pv&&performance.now()<pv.until)?pv.at:undefined; const q={x:v.x!==undefined?v.x:cur.x,y:v.y!==undefined?v.y:cur.y,a:v.a!==undefined?v.a:cur.a,z:v.z!==undefined?v.z:cur.z,at:v.at!==undefined?v.at:lat,until:performance.now()+(fin?2500:60000)}; OV[id]=q; if(v.c!==undefined) o.c=v.c;
+  if(IS_PLAYER){ const pv=OV[id], lat=(pv&&performance.now()<pv.until)?pv.at:undefined; const q={x:v.x!==undefined?v.x:cur.x,y:v.y!==undefined?v.y:cur.y,a:v.a!==undefined?v.a:cur.a,z:v.z!==undefined?v.z:cur.z,at:v.at!==undefined?v.at:lat,until:performance.now()+(fin?2500:60000)}; OV[id]=q; if(v.c!==undefined) o.c=v.c; { const pq=PENDS.find(w=>w.o.id===id); if(pq) [pq.o,o].forEach(w=>{ w.x=q.x; w.y=q.y; w.a=q.a; w.z=q.z; if(v.c!==undefined) w.c=v.c; if(q.at!==undefined) w.at=q.at; }); }
     const t=performance.now(); if(fin||t-lastSend>70){ lastSend=t; sendAct({k:'mv',kind:'s',id,x:q.x,y:q.y,a:q.a,z:q.z,c:v.c,at:q.at}); } livePres(fin?null:{k:'s',id,x:q.x,y:q.y,a:q.a,z:q.z,at:q.at}); }
   else { ['x','y','a','z','c'].forEach(k=>{ if(v[k]!==undefined) o[k]=v[k]; }); if(v.at!==undefined) o.at=v.at; save(); livePres(fin?null:{k:'s',id,x:o.x,y:o.y,a:o.a,z:o.z,at:o.at||null}); } }
 function placeShape(t,wx,wy,free){ if(SH().length>=40){ toast('Твърде много форми — изтрий някоя.'); return; } const h=heroAt(wx,wy); let x=clamp(wx,0,W), y=clamp(wy,0,H); if(h){ const p=P(h); x=p.x; y=p.y; } else if(!free) [x,y]=snapHalf(x,y);
   const o={id:uid('s'),t,x,y,a:t==='c'?0:-Math.PI/2,z:SPUI.z,c:SPUI.c,by:ME().name,at:h?h.id:null};
-  if(IS_PLAYER){ sendAct({k:'sadd',s:o}); SH().push(Object.assign({_p:Date.now()},o)); } else { SH().push(o); save(); }
+  if(IS_PLAYER){ sendAct({k:'sadd',s:o}); PENDS.push({o:Object.assign({},o),t0:Date.now(),tr:Date.now()}); SH().push(Object.assign({_p:1},o)); } else { SH().push(o); save(); }
   sel={kind:'s',id:o.id}; if(!IS_PLAYER) markSel(); }
-function delShape(id){ const L=SH(), i=L.findIndex(o=>o.id===id); if(i<0) return; if(IS_PLAYER) sendAct({k:'del',kind:'s',id}); L.splice(i,1); if(sel&&sel.id===id) sel=null; if(!IS_PLAYER) save(); }
-function setTool(t){ const was=TOOL; TOOL=t; if(was==='ptr'&&t!=='ptr') ptrEnd(); syncTools();
-  if(t==='ptr') toast('Сочиш: движи мишката или пръста по картата. Натисни пак „Сочи“, за да спреш.'); else if(t&&t.place) toast('Кликни на картата, където започва магията ('+SPT[t.place]+', '+SPUI.z+' ф).'); }
+function delShape(id){ const L=SH(), i=L.findIndex(o=>o.id===id); if(i<0) return; { const pi=PENDS.findIndex(w=>w.o.id===id); if(pi>=0) PENDS.splice(pi,1); } if(IS_PLAYER) sendAct({k:'del',kind:'s',id}); L.splice(i,1); if(sel&&sel.id===id) sel=null; if(!IS_PLAYER) save(); }
+function setTool(t){ TOOL=t; syncTools();
+  if(t==='ptr') toast('Сочиш: кликни или влачи по картата. Показалецът остава там, докато не кликнеш върху него.'); else if(t&&t.place) toast('Кликни на картата, където започва магията ('+SPT[t.place]+', '+SPUI.z+' ф).'); }
 function syncSpellUI(){ const box=document.getElementById('spell'); if(!box) return; const so=sel&&sel.kind==='s'?find('s',sel.id):null, z=so?PS(so).z:SPUI.z, c=so?so.c:SPUI.c, t=TOOL&&TOOL.place?TOOL.place:(so?so.t:null);
   box.querySelectorAll('[data-st]').forEach(b=>b.classList.toggle('on',b.dataset.st===t)); box.querySelectorAll('[data-sz]').forEach(b=>b.classList.toggle('on',+b.dataset.sz===z)); box.querySelectorAll('[data-sc]').forEach(b=>b.classList.toggle('on',+b.dataset.sc===c)); }
 (function(){ const box=document.getElementById('spell');
@@ -856,6 +862,7 @@ function syncSpellUI(){ const box=document.getElementById('spell'); if(!box) ret
     else if(b.dataset.sz){ SPUI.z=+b.dataset.sz; if(so&&canTouch('s')){ snapHist(true); shapeSet(so.id,{z:SPUI.z},true); } }
     else if(b.dataset.sc){ SPUI.c=+b.dataset.sc; if(so&&canTouch('s')){ snapHist(true); shapeSet(so.id,{c:SPUI.c},true); } }
     else if(b.id==='spClr'&&!IS_PLAYER){ if(SH().length){ snapHist(true); S.shapes=[]; sel=null; save(); toast('Формите са изчистени. „Назад“ ги връща.'); } }
+    else if(b.id==='ptClr'&&!IS_PLAYER){ Object.keys(PTRS).forEach(ptrRemove); }
     syncSpellUI(); });
   document.getElementById('bSpell').onclick=()=>{ box.classList.toggle('show'); if(!box.classList.contains('show')&&TOOL&&TOOL.place) setTool(null); syncTools(); };
   document.getElementById('bPtr').onclick=()=>setTool(TOOL==='ptr'?null:'ptr'); })();
@@ -867,21 +874,28 @@ function ME(){ if(!IS_PLAYER) return {name:'Водещ',color:'#e0b75c'}; const 
 let meSig='';
 function syncMe(){ const el=document.getElementById('meSel'); if(!el||!S) return; const sig=S.heroes.map(h=>h.id+h.name).join('|')+'#'+MEID; if(sig===meSig) return; meSig=sig;
   el.innerHTML='<option value="">Аз съм…</option>'+S.heroes.map(h=>`<option value="${h.id}"${h.id===MEID?' selected':''}>${esc(h.name)}</option>`).join(''); }
-document.getElementById('meSel').addEventListener('change',e=>{ MEID=e.target.value; try{ localStorage.setItem('zalata_me',MEID); }catch(x){} meSig=''; syncMe(); e.target.blur(); });
+document.getElementById('meSel').addEventListener('change',e=>{ MEID=e.target.value; try{ localStorage.setItem('zalata_me',MEID); }catch(x){} meSig=''; syncMe(); e.target.blur(); const p=PTRS[CID]; if(p) ptrSend(p.x,p.y,true); });
 const PTRS={}, PINGS=[], SEENP=new Set(); let ptrLast=0, ptrT=null;
 function liveOut(topic,obj){ if(PAGES) pgPub(topic,obj,0); }
-function ptrIn(m){ if(m.x===null||!isFinite(m.x)||!isFinite(m.y)){ delete PTRS[m.cid]; return; } const p=PTRS[m.cid]||(PTRS[m.cid]={tr:[]}); p.x=m.x; p.y=m.y; p.c=/^#[0-9a-f]{6}$/i.test(m.c)?m.c:'#fff'; p.n=String(m.n||'').slice(0,24); p.t=performance.now(); p.tr.push([m.x,m.y,p.t]); if(p.tr.length>14) p.tr.shift(); }
+function ptrR(){ return Math.max(6/cam.s,cell()*.13); }
+function ptrIn(m){ if(m.x===null||!isFinite(m.x)||!isFinite(m.y)){ if(m.cid===CID) clearTimeout(ptrT); delete PTRS[m.cid]; return; } const p=PTRS[m.cid]||(PTRS[m.cid]={tr:[]}), t=performance.now(), mv=p.x!==m.x||p.y!==m.y; p.x=m.x; p.y=m.y; p.c=/^#[0-9a-f]{6}$/i.test(m.c)?m.c:'#fff'; p.n=String(m.n||'').slice(0,24); p.seen=t; if(mv){ p.tr.push([m.x,m.y,t]); if(p.tr.length>14) p.tr.shift(); } }
 function ptrSend(wx,wy,now){ const me=ME(), m={cid:CID,x:Math.round(wx),y:Math.round(wy),c:me.color,n:me.name}; ptrIn(m); clearTimeout(ptrT); const go=()=>{ ptrLast=performance.now(); liveOut('ptr',m); }, dt=performance.now()-ptrLast; if(now||dt>=75) go(); else ptrT=setTimeout(go,75-dt); }
-function ptrEnd(){ clearTimeout(ptrT); if(PTRS[CID]){ delete PTRS[CID]; liveOut('ptr',{cid:CID,x:null}); } }
-function pingIn(m){ if(!isFinite(m.x)||!isFinite(m.y)||SEENP.has(m.id)) return; SEENP.add(m.id); if(SEENP.size>500) SEENP.clear(); PINGS.push({x:m.x,y:m.y,c:/^#[0-9a-f]{6}$/i.test(m.c)?m.c:'#fff',n:String(m.n||'').slice(0,24),t:performance.now()}); if(PINGS.length>12) PINGS.shift(); }
+/* показалецът стои, докато не го махнат: собственикът (клик върху него) или Водещият */
+function ptrRemove(cid){ if(!PTRS[cid]) return; delete PTRS[cid]; if(cid===CID){ clearTimeout(ptrT); liveOut('ptr',{cid:CID,x:null}); } else liveOut('ptr',{cid,x:null,by:CID}); }
+function ptrEnd(){ ptrRemove(CID); }
+setInterval(()=>{ const p=PTRS[CID]; if(p){ const me=ME(); liveOut('ptr',{cid:CID,x:p.x,y:p.y,c:me.color,n:me.name}); } },8000);   /* за новодошлите екрани */
+addEventListener('pagehide',()=>{ if(PTRS[CID]) liveOut('ptr',{cid:CID,x:null}); });
+function pingIn(m){ if(!isFinite(m.x)||!isFinite(m.y)||SEENP.has(m.id)) return; SEENP.add(m.id); if(SEENP.size>500) SEENP.clear(); PINGS.push({x:m.x,y:m.y,c:/^#[0-9a-f]{6}$/i.test(m.c)?m.c:'#fff',n:String(m.n||'').slice(0,24),t:performance.now()}); if(PINGS.length>12) PINGS.shift(); ptrIn({cid:m.cid,x:m.x,y:m.y,c:m.c,n:m.n}); }
 function ping(wx,wy){ const me=ME(), m={cid:CID,id:uid('g'),x:Math.round(wx),y:Math.round(wy),c:me.color,n:me.name}; pingIn(m); liveOut('ping',m); }
 function drawPointers(now){ const cs=cell();
   for(let i=PINGS.length-1;i>=0;i--){ const p=PINGS[i], t=(now-p.t)/2800; if(t>1){ PINGS.splice(i,1); continue; } ctx.save(); ctx.globalCompositeOperation='lighter';
     for(let k=0;k<3;k++){ const tt=(t*2.2-k*.28)%1; if(t*2.2-k*.28<0) continue; const r=cs*(.25+1.5*tt); ctx.globalAlpha=(1-tt)*(1-t*.6); ctx.lineWidth=Math.max(2.5/cam.s,cs*.07)*(1-tt*.5); ctx.strokeStyle=p.c; ctx.beginPath(); ctx.arc(p.x,p.y,r,0,7); ctx.stroke(); }
     ctx.globalAlpha=1-t*.5; ctx.fillStyle=p.c; ctx.beginPath(); ctx.arc(p.x,p.y,Math.max(4/cam.s,cs*.1),0,7); ctx.fill(); ctx.restore(); label(p.n,p.x,p.y+cs*.3,p.c); }
-  for(const k in PTRS){ const p=PTRS[k], age=now-p.t; if(age>2500){ delete PTRS[k]; continue; } const al=age>1700?1-(age-1700)/800:1, r=Math.max(6/cam.s,cs*.13); ctx.save(); ctx.lineCap='round'; ctx.lineJoin='round';
-    for(let i=1;i<p.tr.length;i++){ const a=p.tr[i-1], b=p.tr[i], f=clamp(1-(now-b[2])/700,0,1); if(f<=0) continue; ctx.globalAlpha=f*.6*al; ctx.strokeStyle=p.c; ctx.lineWidth=r*(.4+1.1*f); ctx.beginPath(); ctx.moveTo(a[0],a[1]); ctx.lineTo(b[0],b[1]); ctx.stroke(); }
-    ctx.globalAlpha=.35*al; ctx.fillStyle=p.c; ctx.beginPath(); ctx.arc(p.x,p.y,r*2.1,0,7); ctx.fill(); ctx.globalAlpha=al; ctx.beginPath(); ctx.arc(p.x,p.y,r,0,7); ctx.fill(); ctx.lineWidth=Math.max(1.5/cam.s,r*.22); ctx.strokeStyle='#fff'; ctx.stroke(); ctx.restore(); if(al>.5) label(p.n,p.x,p.y+r*1.6,p.c); } }
+  for(const k in PTRS){ const p=PTRS[k]; if(k!==CID&&now-p.seen>600000){ delete PTRS[k]; continue; } const r=ptrR(); ctx.save(); ctx.lineCap='round'; ctx.lineJoin='round';
+    for(let i=1;i<p.tr.length;i++){ const a=p.tr[i-1], b=p.tr[i], f=clamp(1-(now-b[2])/700,0,1); if(f<=0) continue; ctx.globalAlpha=f*.6; ctx.strokeStyle=p.c; ctx.lineWidth=r*(.4+1.1*f); ctx.beginPath(); ctx.moveTo(a[0],a[1]); ctx.lineTo(b[0],b[1]); ctx.stroke(); }
+    const br=.5+.5*Math.sin(now/480+hsh(k)*6); ctx.globalAlpha=.16+.2*br; ctx.fillStyle=p.c; ctx.beginPath(); ctx.arc(p.x,p.y,r*(2+.9*br),0,7); ctx.fill();
+    ctx.globalAlpha=.9; ctx.lineWidth=Math.max(1.5/cam.s,r*.2); ctx.strokeStyle=p.c; ctx.beginPath(); ctx.arc(p.x,p.y,r*1.75,0,7); ctx.stroke();
+    ctx.globalAlpha=1; ctx.beginPath(); ctx.arc(p.x,p.y,r,0,7); ctx.fill(); ctx.lineWidth=Math.max(1.5/cam.s,r*.22); ctx.strokeStyle='#fff'; ctx.stroke(); ctx.restore(); label(p.n,p.x,p.y+r*2.1,p.c); } }
 
 /* ---------- Инструменти и панел ---------- */
 let toastT=null; function toast(m){ const el=document.getElementById('toast'); el.textContent=m; el.classList.add('show'); clearTimeout(toastT); toastT=setTimeout(()=>el.classList.remove('show'),2800); }
