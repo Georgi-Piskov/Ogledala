@@ -63,6 +63,16 @@ h3 .sp{flex:1}
 #net{font:600 9px/1 system-ui,sans-serif;letter-spacing:.14em;text-transform:uppercase;color:var(--mut);white-space:nowrap}
 #net.ok{color:#8fd49a}
 #net.warn{color:#f0b35c}
+#spell{position:fixed;left:10px;top:52px;z-index:7;display:none;width:min(330px,calc(100vw - 20px));background:#101116f2;border:1px solid var(--line);border-radius:12px;padding:10px;box-shadow:0 10px 30px #000a}
+#spell.show{display:block}
+#spell .sr{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
+#spell .sr:last-child{margin-bottom:0}
+#spell .sh{color:var(--mut);font-size:11px;line-height:1.4;margin-bottom:8px}
+#spell .sw{width:26px;height:26px;border-radius:50%;border:2px solid #0000;cursor:pointer;padding:0;box-shadow:inset 0 0 0 1px #0008}
+#spell .sw.on{border-color:#fff}
+#meSel{background:#14151bcc;border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:5px 6px;font:500 12px system-ui,sans-serif;max-width:120px}
+#cv.tool{cursor:crosshair}
+@media (max-width:620px){#title{display:none}.btn{padding:6px 8px}#topbar{overflow-x:auto;gap:6px;padding:0 8px;scrollbar-width:none}#topbar::-webkit-scrollbar{display:none}#topbar>*{flex:none}}
 .btn:disabled{opacity:.38;cursor:default}
 @media (max-width:760px){:root{--sw:290px}#title small{display:none}}
 </style>
@@ -75,6 +85,9 @@ h3 .sp{flex:1}
   <button class="btn dm" id="bZones" title="Показва обхвата на огледалата и свещниците и препятствията само на твоя екран (Z)">◔ Обхват</button>
   <button class="btn" id="bFit" title="Събери картата в екрана (0)">⤢ Събери</button>
   <button class="btn dm" id="bUndo" title="Една стъпка назад (Ctrl+Z)" disabled>↶ Назад</button>
+  <button class="btn" id="bPtr" title="Сочи по картата — другите виждат показалеца ти (P). Задържане или двоен клик на празно място пуска сигнал.">☝ Сочи</button>
+  <button class="btn" id="bSpell" title="Форми за магии: кръг, конус, куб, линия (M)">✦ Магии</button>
+  <select id="meSel" class="pl" title="Кой си ти — показалецът и магиите ти носят това име и цвят"></select>
   <span class="sp"></span>
   <span id="net">офлайн</span>
   <button class="btn dm" id="bSide" title="Панел (H)">☰</button>
@@ -110,10 +123,17 @@ h3 .sp{flex:1}
   <input id="plink" readonly>
   <div style="display:flex;gap:6px"><button class="btn sm" data-act="copyLink">Копирай адреса</button><a class="btn sm" id="plinkA" target="_blank" rel="noopener" style="text-decoration:none">Отвори</a></div>
   <h3>Клавиши</h3>
-  <div class="note"><b>Влачи</b> пулче, огледало или свещник. Избраното огледало се върти с кръглата дръжка или с <b>Q / E</b>. <b>Двоен клик</b>: свещник — гаси/пали, огледало — покрива/открива. <b>Delete</b> маха избраното. <b>Alt</b> при пускане — без залепване.</div>
+  <div class="note"><b>Влачи</b> пулче, огледало или свещник. Избраното огледало се върти с кръглата дръжка или с <b>Q / E</b>. <b>Двоен клик</b>: свещник — гаси/пали, огледало — покрива/открива. <b>Delete</b> маха избраното. <b>Alt</b> при пускане — без залепване. <b>P</b> — сочи; <b>задържане</b> или двоен клик на празно място — сигнал; <b>M</b> — форми за магии; <b>Esc</b> — отказ.</div>
   <button class="btn danger" data-act="reset" id="bReset">Нулирай залата</button>
   <div class="note" id="netInfo" style="margin-top:12px;font:11px/1.45 ui-monospace,monospace"></div>
 </aside>
+<div id="spell">
+  <div class="sr"><button class="btn sm" data-st="c">● Кръг</button><button class="btn sm" data-st="k">◣ Конус</button><button class="btn sm" data-st="q">■ Куб</button><button class="btn sm" data-st="l">▬ Линия</button></div>
+  <div class="sr" id="spZ"></div>
+  <div class="sr" id="spC"></div>
+  <div class="sh">Избери форма и кликни на картата. Влачи точката, за да я местиш; дръжката в края сменя посоката и размера. Пусната върху герой, формата тръгва с него.</div>
+  <div class="sr"><button class="btn sm danger dm" id="spClr">Изчисти всички форми</button></div>
+</div>
 <div id="toast"></div>
 <div id="warn" style="position:fixed;left:50%;top:56px;transform:translateX(-50%);z-index:9;display:none;max-width:86vw;background:#2a1a10f2;border:1px solid #a8702a;border-radius:10px;padding:9px 14px;font:600 13px/1.4 system-ui,sans-serif;color:#ffd9a0;text-align:center"></div>
 <div id="diag" style="position:fixed;left:10px;bottom:10px;z-index:8;display:none;max-width:70vw;background:#0d0e12ee;border:1px solid #2a2c36;border-radius:8px;padding:6px 9px;font:11px/1.45 ui-monospace,monospace;color:#9fa3b0;white-space:pre-wrap;pointer-events:none"></div>
@@ -182,9 +202,9 @@ function freshArr(key){ const M=MAPS[key]||MAPS.imperial, c=M.W/M.cols;
              {id:'m5',x:q(14),y:q(12.3),a:Math.PI/2,cov:false,brk:false,seed:5501}],
     candles:[{id:'c1',x:q(5.5),y:q(19.5),lit:true},{id:'c2',x:q(16.5),y:q(21),lit:true},{id:'c3',x:q(11),y:q(30.5),lit:true},{id:'c4',x:q(22.5),y:q(33),lit:true},{id:'c5',x:q(9.6),y:q(11),lit:true},{id:'c6',x:q(18.4),y:q(11),lit:true}] }; }
 function freshState(){ return Object.assign({ v:SCHEMA, rev:0, wid:'', ts:0, map:'imperial', saved:{}, fx:[], cfg:{mR:15,mW:3,cR:15,dark:.62,zP:false,pm:true,snap:true,breath:true,ripple:true,ghost:true} }, freshArr('imperial')); }
-const ARR_KEYS=['grid','gridPx','ft','heroes','foes','mirrors','candles'];
+const ARR_KEYS=['grid','gridPx','ft','heroes','foes','mirrors','candles','shapes'];
 function pickArr(st){ const o={}; ARR_KEYS.forEach(k=>o[k]=st[k]); return JSON.parse(JSON.stringify(o)); }
-function normArr(st){ st.foes=Array.isArray(st.foes)?st.foes:[]; st.mirrors=Array.isArray(st.mirrors)?st.mirrors:[]; st.candles=Array.isArray(st.candles)?st.candles:[];
+function normArr(st){ st.shapes=Array.isArray(st.shapes)?st.shapes.filter(validShape).slice(0,40):[]; st.foes=Array.isArray(st.foes)?st.foes:[]; st.mirrors=Array.isArray(st.mirrors)?st.mirrors:[]; st.candles=Array.isArray(st.candles)?st.candles:[];
   st.mirrors.forEach((m,i)=>{ if(typeof m.a!=='number') m.a=0; m.cov=!!m.cov; m.brk=!!m.brk; if(typeof m.seed!=='number') m.seed=Math.floor(hsh(m.id)*1e6)+i; });
   st.foes.forEach(f=>{ f.mw=!!f.mw; if(!f.mw||!st.mirrors.some(m=>m.id===f.inM)) f.inM=null; });
   if(!(st.gridPx>0)) st.gridPx=64; if(!(st.ft>0)) st.ft=5; st.grid=!!st.grid; return st; }
@@ -234,7 +254,7 @@ function livePres(d){ if(PAGES){ clearTimeout(PG.dragT); const go=()=>{ PG.lastD
   if(!ROOM||typeof ROOM.presence!=='function') return; try{ safe(ROOM.presence({drag:d})); }catch(e){} }
 const LASTD={}, LASTID={}; /* влаченето е свършило: държим позицията още малко, докато дойде записаното състояние */
 function dropRemote(peer){ const id=LASTID[peer]; delete LASTID[peer]; const v=id&&OV[id]; if(v&&!(drag&&drag.id===id)) v.until=Math.min(v.until,performance.now()+700); }
-function remoteDrag(d){ if(!d||!d.id||!isFinite(d.x)||!isFinite(d.y)) return; if(drag&&drag.id===d.id) return; OV[d.id]={x:d.x,y:d.y,a:isFinite(d.a)?d.a:undefined,until:performance.now()+2500}; }
+function remoteDrag(d){ if(!d||!d.id||!isFinite(d.x)||!isFinite(d.y)) return; if(drag&&drag.id===d.id) return; OV[d.id]={x:d.x,y:d.y,a:isFinite(d.a)?d.a:undefined,z:isFinite(d.z)?d.z:undefined,at:(d.at===null||typeof d.at==='string')?d.at:undefined,until:performance.now()+2500}; }
 function touch(){ if(IS_PLAYER) return; const t=Date.now(), first=t-myAct>1500; myAct=t; if(first) beat(); }
 function netLabel(){ const el=document.getElementById('net'); if(!el) return; const on=PAGES?pgOn():!!(ROOM||DOC), n=IS_PLAYER?0:dmPeers().length; let t=on?(IS_PLAYER?(VIEW_ONLY?'само гледане':'свързан'):(HYD?'синхронизация':'зареждане…')):'офлайн'; if(n) t+=' · Водещ ×'+(n+1);
   el.textContent=t; el.title=n?('Отворени са '+(n+1)+' екрана на Водещия. Ходовете на играчите записва екранът, който си ползвал последно.'):''; el.classList.toggle('ok',on&&HYD&&!n); el.classList.toggle('warn',n>0); }
@@ -274,6 +294,8 @@ function pgMsg(topic,payload){ let m; try{ m=JSON.parse(payload.toString()); }ca
   if(t==='state') pgState(m);
   else if(t==='act'){ NS.rx.act++; onMsg(m); }
   else if(t==='dm'){ if(m&&m.cid&&m.cid!==CID){ NS.rx.dm++; seePeer(m.cid,m.act); } }
+  else if(t==='ptr'){ if(m&&m.cid&&m.cid!==CID) ptrIn(m); }
+  else if(t==='ping'){ if(m&&m.id&&m.cid!==CID) pingIn(m); }
   else if(t==='drag'){ if(!m||!m.cid||m.cid===CID) return; NS.rx.peers++; if(m.d){ LASTID[m.cid]=m.d.id; remoteDrag(m.d); } else dropRemote(m.cid); } }
 function pgUp(){ netLabel(); if(IS_PLAYER){ setTimeout(()=>{ if(!PG.got) warn('Водещият още не е отворил играта. Щом я отвори, картата ще се появи сама.'); },4500); return; }
   warn(''); setTimeout(()=>{ if(!HYD) hydrated(); if(!(S.rev>0)) save(); else pgPubState(); beat(); sideSig=''; syncSide(true); },HYD?1200:2400); }
@@ -327,7 +349,13 @@ async function dbWrite(){ if(!DOC) return; if(writing){ dirty=true; return; } wr
 addEventListener('storage',e=>{ if(e.key===KEY&&e.newValue){ try{ incoming(JSON.parse(e.newValue)); }catch(x){} } if(e.key===KEY_MSG&&e.newValue){ try{ onMsg(JSON.parse(e.newValue)); }catch(x){} } });
 function sendAct(d){ const m={cid:CID,n:Math.random(),d:Object.assign({map:S.map},d)}; if(PAGES) pgPub('act',m,1); if(ROOM){ try{ safe(ROOM.emit(TP.act,m)); NS.tx++; }catch(e){ NS.err=String(e).slice(0,80); } } try{ localStorage.setItem(KEY_MSG,JSON.stringify(m)); }catch(e){} }
 const SEEN_ACT=new Set();
-function onMsg(m){ if(IS_PLAYER||!HYD||!m||m.cid===CID||!m.d) return; const mid=m.cid+':'+m.n; if(SEEN_ACT.has(mid)) return; SEEN_ACT.add(mid); if(SEEN_ACT.size>5000) SEEN_ACT.clear(); if(!isLeader()) return; const d=thaw(m.d); if(d.map&&d.map!==S.map) return; if(!S.cfg.pm) return; if(d.kind==='f') return; const o=find(d.kind,d.id); if(!o) return; snapHist();
+function onMsg(m){ if(IS_PLAYER||!HYD||!m||m.cid===CID||!m.d) return; const mid=m.cid+':'+m.n; if(SEEN_ACT.has(mid)) return; SEEN_ACT.add(mid); if(SEEN_ACT.size>5000) SEEN_ACT.clear(); if(!isLeader()) return; const d=thaw(m.d); if(d.map&&d.map!==S.map) return; if(!S.cfg.pm) return;
+  if(d.k==='sadd'){ const n=d.s; if(!validShape(n)||SH().length>=40||find('s',n.id)) return; snapHist(); SH().push({id:n.id,t:n.t,x:clamp(n.x,0,W),y:clamp(n.y,0,H),a:n.a,z:n.z,c:n.c,by:String(n.by||'').slice(0,24),at:n.at&&find('h',n.at)?n.at:null}); save(); return; }
+  if(d.kind==='s'){ const o=find('s',d.id); if(!o) return; snapHist();
+    if(d.k==='del'){ const L=SH(), i=L.indexOf(o); if(i>=0) L.splice(i,1); if(sel&&sel.id===d.id) sel=null; }
+    else if(d.k==='mv'){ if(isFinite(d.x)&&isFinite(d.y)){ o.x=clamp(d.x,0,W); o.y=clamp(d.y,0,H); } if(isFinite(d.a)) o.a=d.a; if(isFinite(d.z)) o.z=clamp(Math.round(d.z/5)*5,5,300); if(Number.isInteger(d.c)&&SPC[d.c]) o.c=d.c; if(d.at===null) o.at=null; else if(typeof d.at==='string'&&find('h',d.at)) o.at=d.at; }
+    save(); return; }
+  if(d.kind==='f') return; const o=find(d.kind,d.id); if(!o) return; snapHist();
   if(d.k==='mv'){ if(isFinite(d.x)&&isFinite(d.y)){ o.x=clamp(d.x,0,W); o.y=clamp(d.y,0,H); } if(d.kind==='m'&&isFinite(d.a)) o.a=d.a; save(); }
   else if(d.k==='lit'&&d.kind==='c'){ o.lit=!!d.lit; save(); syncSide(true); }
   else if(d.k==='cov'&&d.kind==='m'){ o.cov=!!d.cov; save(); syncSide(true); } }
@@ -345,7 +373,7 @@ function runFx(){ const now=performance.now(), tn=Date.now(); (S.fx||[]).forEach
 /* ---------- Геометрия и видимост ---------- */
 function cell(){ return S.gridPx; }
 function ftpx(ft){ return ft/S.ft*S.gridPx; }
-function listOf(kind){ return kind==='h'?S.heroes:kind==='f'?S.foes:kind==='m'?S.mirrors:S.candles; }
+function listOf(kind){ return kind==='h'?S.heroes:kind==='f'?S.foes:kind==='m'?S.mirrors:kind==='s'?SH():S.candles; }
 function find(kind,id){ return (listOf(kind)||[]).find(o=>o.id===id)||null; }
 const OV={};                     /* местни позиции, докато играч влачи (преди Водещият да потвърди) */
 function P(o){ const v=OV[o.id]; if(v&&performance.now()<v.until) return v.a===undefined?{x:v.x,y:v.y,a:o.a,until:v.until}:v; return o; }
@@ -667,14 +695,16 @@ function frame(now){
   drawLight(now);
   world();
   S.mirrors.forEach(m=>drawMirrorEmissive(m,now));
-  drawFloorSheen(now); drawShards(now,true); drawZones(); drawFlames(now); drawFloorGhosts(now); drawInsideGhosts(now);
+  drawFloorSheen(now); drawShards(now,true); drawShapes(now); drawZones(); drawFlames(now); drawFloorGhosts(now); drawInsideGhosts(now);
   if(!IS_PLAYER) drawDMLayer(now);
   drawAnims(now);
   S.heroes.forEach(h=>{ if(h.out) return; const p=P(h), G=figGeom(h.id); label(h.name,p.x,p.y+G.rB*1.15); });
-  if(sel){ const o=find(sel.kind,sel.id); if(o&&!(sel.kind==='h'&&o.out)&&!(sel.kind==='f'&&o.inM)){ const p=P(o); ctx.save(); ctx.setLineDash([7/cam.s,5/cam.s]); ctx.lineDashOffset=-now/60; ctx.lineWidth=1.6/cam.s; ctx.strokeStyle='#e0b75c';
+  if(sel&&sel.kind==='s'){ const o=find('s',sel.id); if(o) drawShapeSel(o,now); else sel=null; }
+  else if(sel){ const o=find(sel.kind,sel.id); if(o&&!(sel.kind==='h'&&o.out)&&!(sel.kind==='f'&&o.inM)){ const p=P(o); ctx.save(); ctx.setLineDash([7/cam.s,5/cam.s]); ctx.lineDashOffset=-now/60; ctx.lineWidth=1.6/cam.s; ctx.strokeStyle='#e0b75c';
       if(sel.kind==='m'){ const g=mirGeom(o), q=mirQuad(g); ctx.beginPath(); q.forEach(([x,y],i)=>i?ctx.lineTo(x,y):ctx.moveTo(x,y)); ctx.closePath(); ctx.stroke(); const hp=handlePos(o), hr=handleR(); ctx.setLineDash([]); ctx.beginPath(); ctx.moveTo(p.x,p.y); ctx.lineTo(hp[0],hp[1]); ctx.strokeStyle='rgba(224,183,92,.6)'; ctx.stroke(); ctx.beginPath(); ctx.arc(hp[0],hp[1],hr,0,7); ctx.fillStyle='#e0b75c'; ctx.fill(); ctx.strokeStyle='#1a1408'; ctx.stroke(); ctx.fillStyle='#1a1408'; ctx.font=`700 ${hr*1.3}px system-ui,sans-serif`; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText('⟳',hp[0],hp[1]+hr*.08); }
       else { const r=sel.kind==='c'?cell()*.42:(sel.kind==='h'?figGeom(o.id).rB:figGeom(fkey(o),o.big,true).rB)*1.28; ctx.beginPath(); ctx.arc(p.x,p.y,r,0,7); ctx.stroke(); }
       ctx.restore(); } else if(!o) sel=null; }
+  drawPointers(now);
 }
 function handleR(){ return Math.max(cell()*.2,11/cam.s); }
 function handlePos(m){ const p=P(m), a=p.a||0, d=mirDims().fw/2+cell()*.75; return [p.x+Math.cos(a)*d,p.y+Math.sin(a)*d]; }
@@ -692,11 +722,13 @@ function bodyHit(q,wx,wy){ const p=P(q.o);
   if(q.kind==='c'){ const G=candGeom(q.o); return Math.abs(wx-p.x)<=G.fw*.35&&wy<=p.y&&wy>=p.y-G.fh*.95; }
   return inPoly(wx,wy,mirQuad(mirGeom(q.o))); }
 function hitTest(wx,wy){
+  if(sel&&sel.kind==='s'&&canTouch('s')){ const o=find('s',sel.id); if(o){ const g=shGeom(o), hr=handleR(), tp=tipPos(g), dp=delPos(g); if(Math.hypot(wx-tp[0],wy-tp[1])<=hr*1.5) return {kind:'s',id:o.id,part:'tip'}; if(Math.hypot(wx-dp[0],wy-dp[1])<=hr*1.3) return {kind:'s',id:o.id,part:'del'}; } }
   if(sel&&sel.kind==='m'&&canTouch('m')){ const m=find('m',sel.id); if(m){ const hp=handlePos(m); if(Math.hypot(wx-hp[0],wy-hp[1])<=handleR()*1.5) return {kind:'m',id:m.id,rot:true}; } }
   if(!IS_PLAYER) for(const f of S.foes){ if(!f.inM) continue; const bp=badgePos(f); if(bp&&Math.hypot(wx-bp[0],wy-bp[1])<=badgeR()*1.25) return {kind:'f',id:f.id,badge:true}; }
   const L=[]; S.heroes.forEach(h=>{ if(!h.out) L.push({y:P(h).y,kind:'h',o:h}); }); if(!IS_PLAYER) S.foes.forEach(f=>{ if(!f.inM) L.push({y:P(f).y,kind:'f',o:f}); }); S.candles.forEach(c=>L.push({y:P(c).y,kind:'c',o:c})); S.mirrors.forEach(m=>L.push({y:P(m).y,kind:'m',o:m}));
   L.sort((a,b)=>b.y-a.y);
   for(const q of L) if(baseHit(q,wx,wy)) return {kind:q.kind,id:q.o.id};
+  { const Ls=SH(); for(let i=Ls.length-1;i>=0;i--){ const o=Ls[i], gp=gripPos(o,shGeom(o)); if(Math.hypot(wx-gp[0],wy-gp[1])<=gripR()*1.4) return {kind:'s',id:o.id,part:'grip'}; } }
   for(const q of L) if(bodyHit(q,wx,wy)) return {kind:q.kind,id:q.o.id};
   return null; }
 /* огледало, в което може да се влезе от тази точка (strict — за убиец, влачен по пода) */
@@ -711,21 +743,35 @@ function exitMirror(f,x,y,force){ const m=mirOf(f); if(!m) return; if(!usable(m)
 function toggleBreak(m){ if(!m.brk){ m.brk=true; m.seed=Math.floor(Math.random()*1e9); pushFx('shatter',m.id); const g=mirGeom(m); S.foes.forEach(f=>{ if(f.inM!==m.id) return; let x=g.O[0]+g.nx*cell()*1.1, y=g.O[1]+g.ny*cell()*1.1; if(S.cfg.snap) [x,y]=snapXY(x,y,f.big); f.x=clamp(x,0,W); f.y=clamp(y,0,H); f.inM=null; pushFx('eject',m.id,f.x,f.y); toast(f.name+' е изхвърлен от огледалото!'); }); } else m.brk=false; save(); runFx(); syncSide(true); }
 function toggleCover(id){ const m=find('m',id); if(!m) return; if(IS_PLAYER){ if(S.cfg.pm) sendAct({k:'cov',kind:'m',id,cov:!m.cov}); return; } m.cov=!m.cov; save(); syncSide(true); }
 function toggleLit(id){ const c=find('c',id); if(!c) return; if(IS_PLAYER){ sendAct({k:'lit',kind:'c',id,lit:!c.lit}); } else { c.lit=!c.lit; save(); syncSide(true); } }
-cv.addEventListener('pointerdown',e=>{ if(e.button>0) return; try{ cv.setPointerCapture(e.pointerId); }catch(x){} touch(); const [wx,wy]=toWorld(e.clientX,e.clientY); const hit=hitTest(wx,wy);
+cv.addEventListener('pointerdown',e=>{ if(e.button>0) return; try{ cv.setPointerCapture(e.pointerId); }catch(x){} touch(); const [wx,wy]=toWorld(e.clientX,e.clientY);
+  if(TOOL&&TOOL.place){ if(canTouch('s')){ snapHist(true); placeShape(TOOL.place,wx,wy,e.altKey); } setTool(null); return; }
+  if(TOOL==='ptr'){ drag={k:'ptr'}; ptrSend(wx,wy,true); return; }
+  const hit=hitTest(wx,wy);
+  if(hit&&hit.kind==='s'&&canTouch('s')){ snapHist(true); if(hit.part==='del'){ delShape(hit.id); return; } sel={kind:'s',id:hit.id}; const o=find('s',hit.id), g=shGeom(o);
+    drag=hit.part==='tip'?{k:'stip',id:hit.id}:{k:'obj',kind:'s',id:hit.id,ox:wx-g.x,oy:wy-g.y,moved:false,tgt:null,sx:e.clientX,sy:e.clientY}; syncSpellUI(); camAnim=null; if(!IS_PLAYER) markSel(); return; }
   if(hit&&canTouch(hit.kind)){ snapHist(true); sel={kind:hit.kind,id:hit.id}; if(hit.badge) drag={k:'badge',id:hit.id,x:wx,y:wy,sx:e.clientX,sy:e.clientY,moved:false,tgt:null}; else if(hit.rot) drag={k:'rot',kind:'m',id:hit.id}; else { const o=find(hit.kind,hit.id), p=P(o); drag={k:'obj',kind:hit.kind,id:hit.id,ox:wx-p.x,oy:wy-p.y,moved:false,tgt:null}; } }
-  else { sel=null; drag={k:'pan',sx:e.clientX,sy:e.clientY,cx:cam.x,cy:cam.y}; cv.classList.add('grabbing'); }
+  else { sel=null; drag={k:'pan',sx:e.clientX,sy:e.clientY,cx:cam.x,cy:cam.y}; cv.classList.add('grabbing');
+    /* задържане на празно място = сигнал, който виждат всички */
+    const dd=drag; if(!hit) dd.lp=setTimeout(()=>{ if(drag===dd&&!dd.far&&!pinch){ drag=null; cv.classList.remove('grabbing'); ping(wx,wy); } },550); }
   camAnim=null; if(!IS_PLAYER) markSel(); });
-cv.addEventListener('pointermove',e=>{ if(!drag) return; const [wx,wy]=toWorld(e.clientX,e.clientY);
-  if(drag.k==='pan'){ cam.x=drag.cx+(e.clientX-drag.sx); cam.y=drag.cy+(e.clientY-drag.sy); userMoved=true; }
+cv.addEventListener('pointermove',e=>{ const [wx,wy]=toWorld(e.clientX,e.clientY);
+  if(TOOL==='ptr'&&(e.pointerType==='mouse'||(drag&&drag.k==='ptr'))){ ptrSend(wx,wy); if(drag&&drag.k==='ptr') return; }
+  if(!drag) return;
+  if(drag.k==='pan'){ if(Math.hypot(e.clientX-drag.sx,e.clientY-drag.sy)>6) drag.far=true; if(drag.far){ cam.x=drag.cx+(e.clientX-drag.sx); cam.y=drag.cy+(e.clientY-drag.sy); userMoved=true; } }
+  else if(drag.k==='stip'){ const o=find('s',drag.id); if(!o) return; const g=shGeom(o), v={z:clamp(Math.round(Math.hypot(wx-g.x,wy-g.y)/ftpx(5))*5,5,300)}; if(o.t!=='c'){ let a=Math.atan2(wy-g.y,wx-g.x); if(!e.altKey){ const st=Math.PI/12; a=Math.round(a/st)*st; } v.a=a; } shapeSet(o.id,v); }
+  else if(drag.k==='obj'&&drag.kind==='s'){ if(!drag.moved&&Math.hypot(e.clientX-drag.sx,e.clientY-drag.sy)<5) return; drag.moved=true; shapeSet(drag.id,{x:clamp(wx-drag.ox,0,W),y:clamp(wy-drag.oy,0,H),at:null}); drag.tgtH=heroAt(wx-drag.ox,wy-drag.oy); }
   else if(drag.k==='rot'){ const m=find('m',drag.id); if(!m) return; const p=P(m); let a=Math.atan2(wy-p.y,wx-p.x); const st=Math.PI/36; a=Math.round(a/st)*st; applyMove('m',drag.id,{a}); }
   else if(drag.k==='badge'){ drag.x=wx; drag.y=wy; if(Math.hypot(e.clientX-drag.sx,e.clientY-drag.sy)>5) drag.moved=true; drag.tgt=drag.moved?entryMirror(wx,wy,false):null; }
   else { drag.moved=true; applyMove(drag.kind,drag.id,{x:clamp(wx-drag.ox,0,W),y:clamp(wy-drag.oy,0,H)}); if(drag.kind==='f'){ const f=find('f',drag.id); drag.tgt=f&&f.mw?entryMirror(wx,wy,true):null; } } });
-function endDrag(e){ if(!drag) return; cv.classList.remove('grabbing'); const d=drag; drag=null; if(d.k!=='pan') livePres(null);
+function endDrag(e){ if(!drag) return; cv.classList.remove('grabbing'); const d=drag; drag=null; if(d.lp) clearTimeout(d.lp); if(d.k==='ptr'){ if(!(e&&e.pointerType==='mouse')) ptrEnd(); return; } if(d.k!=='pan') livePres(null);
+  if(d.k==='stip'){ shapeSet(d.id,{},true); return; }
+  if(d.k==='obj'&&d.kind==='s'){ const o=find('s',d.id); if(!o||!d.moved) return; const g=shGeom(o); if(d.tgtH){ const hp=P(d.tgtH); shapeSet(d.id,{x:hp.x,y:hp.y,at:d.tgtH.id},true); } else { let x=g.x,y=g.y; if(!(e&&e.altKey)) [x,y]=snapHalf(x,y); shapeSet(d.id,{x,y,at:null},true); } return; }
   if(d.k==='badge'){ const f=find('f',d.id); if(!f||!d.moved) return; if(d.tgt){ if(d.tgt.id!==f.inM) enterMirror(f,d.tgt); } else exitMirror(f,d.x,d.y); return; }
   if(d.k==='obj'){ const o=find(d.kind,d.id); if(!o) return; if(d.kind==='f'&&d.tgt&&o.mw){ enterMirror(o,d.tgt); return; } const p=P(o); let x=p.x,y=p.y; if(d.moved&&(d.kind==='h'||d.kind==='f')&&S.cfg.snap&&!(e&&e.altKey)) [x,y]=snapXY(x,y,d.kind==='f'&&o.big); if(d.moved) applyMove(d.kind,d.id,{x,y},true); }
   else if(d.k==='rot'){ const m=find('m',d.id); if(m) applyMove('m',d.id,{a:P(m).a},true); } }
 cv.addEventListener('pointerup',endDrag); cv.addEventListener('pointercancel',endDrag);
-cv.addEventListener('dblclick',e=>{ const [wx,wy]=toWorld(e.clientX,e.clientY); const hit=hitTest(wx,wy); if(!hit||hit.badge||!canTouch(hit.kind)) return; if(hit.kind==='c') toggleLit(hit.id); else if(hit.kind==='m') toggleCover(hit.id); });
+cv.addEventListener('pointerleave',()=>{ if(TOOL==='ptr'&&!drag) ptrEnd(); });
+cv.addEventListener('dblclick',e=>{ const [wx,wy]=toWorld(e.clientX,e.clientY); const hit=hitTest(wx,wy); if(!hit){ if(!TOOL) ping(wx,wy); return; } if(hit.badge||hit.kind==='s'||!canTouch(hit.kind)) return; if(hit.kind==='c') toggleLit(hit.id); else if(hit.kind==='m') toggleCover(hit.id); });
 cv.addEventListener('wheel',e=>{ e.preventDefault(); const [wx,wy]=toWorld(e.clientX,e.clientY); const ns=clamp(cam.s*Math.exp(-e.deltaY*.0012),.08,8); cam.x=e.clientX-wx*ns; cam.y=e.clientY-wy*ns; cam.s=ns; userMoved=true; camAnim=null; },{passive:false});
 let pinch=null; cv.addEventListener('touchstart',e=>{ if(e.touches.length===2){ pinch={d:Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY),s:cam.s}; drag=null; } },{passive:true});
 cv.addEventListener('touchmove',e=>{ if(pinch&&e.touches.length===2){ const d=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY); const cx=(e.touches[0].clientX+e.touches[1].clientX)/2, cy=(e.touches[0].clientY+e.touches[1].clientY)/2; const [wx,wy]=toWorld(cx,cy); const ns=clamp(pinch.s*d/pinch.d,.08,8); cam.x=cx-wx*ns; cam.y=cy-wy*ns; cam.s=ns; userMoved=true; } },{passive:true});
@@ -733,17 +779,116 @@ cv.addEventListener('touchend',()=>{ pinch=null; });
 addEventListener('keydown',e=>{ const tg=e.target&&e.target.tagName; if(tg==='INPUT'||tg==='TEXTAREA'||tg==='SELECT') return; const k=e.key.toLowerCase(); touch();
   if(!IS_PLAYER&&(e.ctrlKey||e.metaKey)&&(k==='z'||k==='я')){ e.preventDefault(); undo(); return; }
   if((k==='q'||k==='e'||k==='я'||k==='е'||e.key==='Delete'||e.key==='Backspace')&&sel) snapHist(true);
+  if(e.key==='Escape'){ setTool(null); document.getElementById('spell').classList.remove('show'); syncTools(); return; }
+  if((e.key==='Delete'||e.key==='Backspace')&&sel&&sel.kind==='s'){ if(canTouch('s')) delShape(sel.id); return; }
+  if(k==='p'||k==='п'){ setTool(TOOL==='ptr'?null:'ptr'); return; } if(k==='m'||k==='м'){ document.getElementById('bSpell').click(); return; }
   if(k==='g'||k==='г') toggleGrid(); else if(k==='0') fit();
   else if(!IS_PLAYER&&(k==='h'||k==='х')) toggleSide(); else if(!IS_PLAYER&&(k==='z'||k==='з')) toggleZones();
   else if((k==='q'||k==='e'||k==='я'||k==='е')&&sel&&sel.kind==='m'&&canTouch('m')){ const m=find('m',sel.id); if(m) applyMove('m',m.id,{a:P(m).a+((k==='q'||k==='я')?-1:1)*Math.PI/12},true); }
   else if(!IS_PLAYER&&(e.key==='Delete'||e.key==='Backspace')&&sel&&sel.kind!=='h') removeObj(sel.kind,sel.id); });
+
+/* ---------- Форми за магии (общи за всички) ---------- */
+const SPC=[['Огън','#ff6a3d'],['Студ','#6fd3ff'],['Мълния','#ffe14d'],['Киселина','#8be04e'],['Некро','#a66bff'],['Сияние','#fff1b8'],['Сила','#ff5fb0'],['Гръм','#7fa8ff']];
+const SPT={c:'кръг',k:'конус',q:'куб',l:'линия'}, SPZ=[5,10,15,20,30,40,60,90,120], CONE_H=Math.atan(.5);
+const SPUI={z:20,c:0}; let TOOL=null;
+function SH(){ return Array.isArray(S.shapes)?S.shapes:(S.shapes=[]); }
+function validShape(n){ return !!n&&typeof n.id==='string'&&n.id.length<=24&&!!SPT[n.t]&&isFinite(n.x)&&isFinite(n.y)&&isFinite(n.a)&&isFinite(n.z)&&n.z>=5&&n.z<=300&&Number.isInteger(n.c)&&!!SPC[n.c]; }
+/* позицията на формата: местната (докато се влачи) печели; закачена за герой, върви с него */
+function PS(o){ const v=OV[o.id], live=v&&performance.now()<v.until; let x=o.x,y=o.y,a=o.a||0,z=o.z,at=o.at||null; if(live){ x=v.x; y=v.y; if(v.a!==undefined) a=v.a; if(v.z!==undefined) z=v.z; if(v.at!==undefined) at=v.at; }
+  if(at){ const h=find('h',at); if(h&&!h.out){ const p=P(h); x=p.x; y=p.y; } else at=null; } return {x,y,a,z,at}; }
+function shGeom(o){ const p=PS(o); return {t:o.t,x:p.x,y:p.y,a:p.a,z:p.z,at:p.at,L:ftpx(p.z),dx:Math.cos(p.a),dy:Math.sin(p.a)}; }
+function shContains(g,px,py){ const ex=px-g.x, ey=py-g.y; if(g.t==='c') return Math.hypot(ex,ey)<=g.L+.5; const s=ex*g.dx+ey*g.dy, l=-ex*g.dy+ey*g.dx;
+  if(g.t==='k'){ const d=Math.hypot(ex,ey); return d>1&&d<=g.L+.5&&Math.abs(Math.atan2(l,s))<=CONE_H+1e-6; }
+  return s>=-.5&&s<=g.L+.5&&Math.abs(l)<=(g.t==='q'?g.L:ftpx(5))/2+.5; }
+function shPath(g){ ctx.beginPath(); if(g.t==='c') ctx.arc(g.x,g.y,g.L,0,Math.PI*2); else if(g.t==='k'){ ctx.moveTo(g.x,g.y); ctx.arc(g.x,g.y,g.L,g.a-CONE_H,g.a+CONE_H); ctx.closePath(); }
+  else { const hw=(g.t==='q'?g.L:ftpx(5))/2, nx=-g.dy, ny=g.dx; ctx.moveTo(g.x+nx*hw,g.y+ny*hw); ctx.lineTo(g.x+g.dx*g.L+nx*hw,g.y+g.dy*g.L+ny*hw); ctx.lineTo(g.x+g.dx*g.L-nx*hw,g.y+g.dy*g.L-ny*hw); ctx.lineTo(g.x-nx*hw,g.y-ny*hw); ctx.closePath(); } }
+const CELLC={};
+function shCells(o,g){ const cs=cell(), key=[g.t,Math.round(g.x),Math.round(g.y),g.a.toFixed(3),Math.round(g.L),cs].join('|'), c=CELLC[o.id]; if(c&&c.k===key) return c.v; const R=g.L+cs, v=[];
+  const x0=Math.max(0,Math.floor((g.x-R)/cs)), x1=Math.min(Math.ceil(W/cs),Math.ceil((g.x+R)/cs)), y0=Math.max(0,Math.floor((g.y-R)/cs)), y1=Math.min(Math.ceil(H/cs),Math.ceil((g.y+R)/cs));
+  for(let i=x0;i<x1;i++) for(let j=y0;j<y1;j++) if(shContains(g,(i+.5)*cs,(j+.5)*cs)) v.push(i,j); CELLC[o.id]={k:key,v}; return v; }
+/* кого засяга: героите за всички; невидимите убийци — само на екрана на Водещия */
+function shHits(o,g){ const out=[]; S.heroes.forEach(h=>{ if(h.out||h.id===g.at) return; const p=P(h); if(shContains(g,p.x,p.y)) out.push(h.name); });
+  S.foes.forEach(f=>{ if(f.inM||(IS_PLAYER&&!f.shown)) return; const p=P(f); if(shContains(g,p.x,p.y)) out.push(f.name); }); return out; }
+function gripR(){ return Math.max(cell()*.17,9/cam.s); }
+function gripPos(o,g){ return g.at?[g.x+cell()*.55,g.y+cell()*.55]:[g.x,g.y]; }
+function tipPos(g){ return g.t==='c'?[g.x+g.L,g.y]:[g.x+g.dx*g.L,g.y+g.dy*g.L]; }
+function delPos(g){ const d=handleR()*3.2, dx=g.t==='c'?1:g.dx, dy=g.t==='c'?0:g.dy; return [g.x-dx*d,g.y-dy*d]; }
+function heroAt(x,y){ let best=null,bd=1e9; S.heroes.forEach(h=>{ if(h.out) return; const p=P(h), d=Math.hypot(x-p.x,y-p.y); if(d<=figGeom(h.id).rB*1.15&&d<bd){ bd=d; best=h; } }); return best; }
+function snapHalf(x,y){ const g=cell()/2; return [Math.round(x/g)*g,Math.round(y/g)*g]; }   /* ъгъл или център на клетка */
+function drawShapes(now){ const list=SH(); if(!list.length) return; const cs=cell(), labs=[];
+  if(IS_PLAYER){ const t=Date.now(); for(let i=list.length-1;i>=0;i--) if(list[i]._p&&t-list[i]._p>6000) list.splice(i,1); }
+  list.forEach(o=>{ const g=shGeom(o), col=(SPC[o.c]||SPC[0])[1], v=shCells(o,g);
+    ctx.save(); ctx.fillStyle=col; ctx.globalAlpha=.12; const pad=1.2/cam.s; for(let i=0;i<v.length;i+=2) ctx.fillRect(v[i]*cs+pad,v[i+1]*cs+pad,cs-2*pad,cs-2*pad);
+    shPath(g); ctx.globalAlpha=.19+.04*Math.sin(now/650+hsh(o.id)*6); ctx.fill();
+    ctx.lineJoin='round'; ctx.globalAlpha=.55; ctx.lineWidth=Math.max(4/cam.s,cs*.075); ctx.strokeStyle='rgba(0,0,0,.55)'; ctx.stroke();
+    ctx.globalAlpha=.95; ctx.lineWidth=Math.max(2/cam.s,cs*.04); ctx.strokeStyle=col; ctx.stroke();
+    if(g.t!=='c'){ ctx.globalAlpha=.5; ctx.setLineDash([cs*.12,cs*.1]); ctx.lineWidth=Math.max(1/cam.s,cs*.018); ctx.beginPath(); ctx.moveTo(g.x,g.y); ctx.lineTo(g.x+g.dx*g.L,g.y+g.dy*g.L); ctx.stroke(); ctx.setLineDash([]); }
+    const gp=gripPos(o,g), gr=gripR(); if(g.at){ ctx.globalAlpha=.7; ctx.lineWidth=Math.max(1/cam.s,cs*.02); ctx.beginPath(); ctx.moveTo(g.x,g.y); ctx.lineTo(gp[0],gp[1]); ctx.stroke(); }
+    ctx.globalAlpha=1; ctx.beginPath(); ctx.arc(gp[0],gp[1],gr,0,7); ctx.fillStyle=col; ctx.fill(); ctx.lineWidth=Math.max(1.5/cam.s,gr*.2); ctx.strokeStyle='#14110c'; ctx.stroke();
+    ctx.fillStyle='#14110c'; ctx.font=`700 ${gr*1.15}px system-ui,sans-serif`; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(g.at?'⚓':'✦',gp[0],gp[1]+gr*.06); ctx.restore();
+    const hits=shHits(o,g); labs.push([g.z+' ф'+(hits.length?' · '+hits.join(', '):''),gp[0],gp[1]-gr*1.45,col]); }); labs.forEach(l=>pill(l[0],l[1],l[2],l[3])); }
+function pill(txt,x,y,color){ const fs=clamp(cell()*.2,9/cam.s,15/cam.s); ctx.save(); ctx.font=`600 ${fs}px system-ui,sans-serif`; const w=ctx.measureText(txt).width+fs*1.1, h=fs*1.55, x0=clamp(x-w/2,0,Math.max(0,W-w)), y0=y-h;
+  ctx.globalAlpha=.82; ctx.fillStyle='#0c0d11'; ctx.beginPath(); if(ctx.roundRect) ctx.roundRect(x0,y0,w,h,h/2); else ctx.rect(x0,y0,w,h); ctx.fill(); ctx.globalAlpha=.9; ctx.lineWidth=Math.max(1/cam.s,fs*.08); ctx.strokeStyle=color; ctx.stroke();
+  ctx.globalAlpha=1; ctx.fillStyle=color; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(txt,x0+w/2,y0+h/2+fs*.04); ctx.restore(); }
+function drawShapeSel(o,now){ const g=shGeom(o), hr=handleR(), tp=tipPos(g), dp=delPos(g), col=(SPC[o.c]||SPC[0])[1];
+  ctx.save(); ctx.setLineDash([7/cam.s,5/cam.s]); ctx.lineDashOffset=-now/60; ctx.lineWidth=1.6/cam.s; ctx.strokeStyle='#fff'; shPath(g); ctx.stroke(); ctx.setLineDash([]);
+  if(canTouch('s')){ ctx.beginPath(); ctx.arc(tp[0],tp[1],hr,0,7); ctx.fillStyle='#fff'; ctx.fill(); ctx.lineWidth=Math.max(1.5/cam.s,hr*.16); ctx.strokeStyle=col; ctx.stroke(); ctx.fillStyle='#14110c'; ctx.font=`700 ${hr*1.15}px system-ui,sans-serif`; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(g.t==='c'?'↔':'⤢',tp[0],tp[1]+hr*.06);
+    ctx.beginPath(); ctx.arc(dp[0],dp[1],hr*.85,0,7); ctx.fillStyle='#3a1414'; ctx.fill(); ctx.strokeStyle='#ff9c8f'; ctx.stroke(); ctx.fillStyle='#ff9c8f'; ctx.fillText('✕',dp[0],dp[1]+hr*.06); }
+  ctx.restore(); if(drag&&(drag.k==='stip'||(drag.k==='obj'&&drag.kind==='s'))) label((SPT[o.t]||'')+' '+g.z+' ф'+(drag.tgtH?' → върви с '+drag.tgtH.name:''),tp[0],tp[1]-hr*2.6,'#fff'); }
+function shapeSet(id,v,fin){ const o=find('s',id); if(!o) return; const cur=PS(o);
+  if(IS_PLAYER){ const pv=OV[id], lat=(pv&&performance.now()<pv.until)?pv.at:undefined; const q={x:v.x!==undefined?v.x:cur.x,y:v.y!==undefined?v.y:cur.y,a:v.a!==undefined?v.a:cur.a,z:v.z!==undefined?v.z:cur.z,at:v.at!==undefined?v.at:lat,until:performance.now()+(fin?2500:60000)}; OV[id]=q; if(v.c!==undefined) o.c=v.c;
+    const t=performance.now(); if(fin||t-lastSend>70){ lastSend=t; sendAct({k:'mv',kind:'s',id,x:q.x,y:q.y,a:q.a,z:q.z,c:v.c,at:q.at}); } livePres(fin?null:{k:'s',id,x:q.x,y:q.y,a:q.a,z:q.z,at:q.at}); }
+  else { ['x','y','a','z','c'].forEach(k=>{ if(v[k]!==undefined) o[k]=v[k]; }); if(v.at!==undefined) o.at=v.at; save(); livePres(fin?null:{k:'s',id,x:o.x,y:o.y,a:o.a,z:o.z,at:o.at||null}); } }
+function placeShape(t,wx,wy,free){ if(SH().length>=40){ toast('Твърде много форми — изтрий някоя.'); return; } const h=heroAt(wx,wy); let x=clamp(wx,0,W), y=clamp(wy,0,H); if(h){ const p=P(h); x=p.x; y=p.y; } else if(!free) [x,y]=snapHalf(x,y);
+  const o={id:uid('s'),t,x,y,a:t==='c'?0:-Math.PI/2,z:SPUI.z,c:SPUI.c,by:ME().name,at:h?h.id:null};
+  if(IS_PLAYER){ sendAct({k:'sadd',s:o}); SH().push(Object.assign({_p:Date.now()},o)); } else { SH().push(o); save(); }
+  sel={kind:'s',id:o.id}; if(!IS_PLAYER) markSel(); }
+function delShape(id){ const L=SH(), i=L.findIndex(o=>o.id===id); if(i<0) return; if(IS_PLAYER) sendAct({k:'del',kind:'s',id}); L.splice(i,1); if(sel&&sel.id===id) sel=null; if(!IS_PLAYER) save(); }
+function setTool(t){ const was=TOOL; TOOL=t; if(was==='ptr'&&t!=='ptr') ptrEnd(); syncTools();
+  if(t==='ptr') toast('Сочиш: движи мишката или пръста по картата. Натисни пак „Сочи“, за да спреш.'); else if(t&&t.place) toast('Кликни на картата, където започва магията ('+SPT[t.place]+', '+SPUI.z+' ф).'); }
+function syncSpellUI(){ const box=document.getElementById('spell'); if(!box) return; const so=sel&&sel.kind==='s'?find('s',sel.id):null, z=so?PS(so).z:SPUI.z, c=so?so.c:SPUI.c, t=TOOL&&TOOL.place?TOOL.place:(so?so.t:null);
+  box.querySelectorAll('[data-st]').forEach(b=>b.classList.toggle('on',b.dataset.st===t)); box.querySelectorAll('[data-sz]').forEach(b=>b.classList.toggle('on',+b.dataset.sz===z)); box.querySelectorAll('[data-sc]').forEach(b=>b.classList.toggle('on',+b.dataset.sc===c)); }
+(function(){ const box=document.getElementById('spell');
+  document.getElementById('spZ').innerHTML=SPZ.map(z=>`<button class="btn sm" data-sz="${z}">${z} ф</button>`).join('');
+  document.getElementById('spC').innerHTML=SPC.map((c,i)=>`<button class="sw" data-sc="${i}" title="${c[0]}" style="background:${c[1]}"></button>`).join('');
+  box.addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b) return; touch(); const so=sel&&sel.kind==='s'?find('s',sel.id):null;
+    if(b.dataset.st){ if(!canTouch('s')){ toast('Водещият е спрял местенето от екрана на играчите.'); return; } setTool(TOOL&&TOOL.place===b.dataset.st?null:{place:b.dataset.st}); }
+    else if(b.dataset.sz){ SPUI.z=+b.dataset.sz; if(so&&canTouch('s')){ snapHist(true); shapeSet(so.id,{z:SPUI.z},true); } }
+    else if(b.dataset.sc){ SPUI.c=+b.dataset.sc; if(so&&canTouch('s')){ snapHist(true); shapeSet(so.id,{c:SPUI.c},true); } }
+    else if(b.id==='spClr'&&!IS_PLAYER){ if(SH().length){ snapHist(true); S.shapes=[]; sel=null; save(); toast('Формите са изчистени. „Назад“ ги връща.'); } }
+    syncSpellUI(); });
+  document.getElementById('bSpell').onclick=()=>{ box.classList.toggle('show'); if(!box.classList.contains('show')&&TOOL&&TOOL.place) setTool(null); syncTools(); };
+  document.getElementById('bPtr').onclick=()=>setTool(TOOL==='ptr'?null:'ptr'); })();
+
+/* ---------- Показалец и сигнал (не се пазят — виждат се, докато траят) ---------- */
+let MEID=''; try{ MEID=localStorage.getItem('zalata_me')||''; }catch(e){}
+const GUESTC=['#f08a5d','#6fd3ff','#b8e986','#f5d76e','#c39bd3','#7fdbca'][Math.floor(hsh(CID)*6)];
+function ME(){ if(!IS_PLAYER) return {name:'Водещ',color:'#e0b75c'}; const h=S&&S.heroes.find(h=>h.id===MEID); return h?{name:h.name,color:h.color}:{name:'Гост',color:GUESTC}; }
+let meSig='';
+function syncMe(){ const el=document.getElementById('meSel'); if(!el||!S) return; const sig=S.heroes.map(h=>h.id+h.name).join('|')+'#'+MEID; if(sig===meSig) return; meSig=sig;
+  el.innerHTML='<option value="">Аз съм…</option>'+S.heroes.map(h=>`<option value="${h.id}"${h.id===MEID?' selected':''}>${esc(h.name)}</option>`).join(''); }
+document.getElementById('meSel').addEventListener('change',e=>{ MEID=e.target.value; try{ localStorage.setItem('zalata_me',MEID); }catch(x){} meSig=''; syncMe(); e.target.blur(); });
+const PTRS={}, PINGS=[], SEENP=new Set(); let ptrLast=0, ptrT=null;
+function liveOut(topic,obj){ if(PAGES) pgPub(topic,obj,0); }
+function ptrIn(m){ if(m.x===null||!isFinite(m.x)||!isFinite(m.y)){ delete PTRS[m.cid]; return; } const p=PTRS[m.cid]||(PTRS[m.cid]={tr:[]}); p.x=m.x; p.y=m.y; p.c=/^#[0-9a-f]{6}$/i.test(m.c)?m.c:'#fff'; p.n=String(m.n||'').slice(0,24); p.t=performance.now(); p.tr.push([m.x,m.y,p.t]); if(p.tr.length>14) p.tr.shift(); }
+function ptrSend(wx,wy,now){ const me=ME(), m={cid:CID,x:Math.round(wx),y:Math.round(wy),c:me.color,n:me.name}; ptrIn(m); clearTimeout(ptrT); const go=()=>{ ptrLast=performance.now(); liveOut('ptr',m); }, dt=performance.now()-ptrLast; if(now||dt>=75) go(); else ptrT=setTimeout(go,75-dt); }
+function ptrEnd(){ clearTimeout(ptrT); if(PTRS[CID]){ delete PTRS[CID]; liveOut('ptr',{cid:CID,x:null}); } }
+function pingIn(m){ if(!isFinite(m.x)||!isFinite(m.y)||SEENP.has(m.id)) return; SEENP.add(m.id); if(SEENP.size>500) SEENP.clear(); PINGS.push({x:m.x,y:m.y,c:/^#[0-9a-f]{6}$/i.test(m.c)?m.c:'#fff',n:String(m.n||'').slice(0,24),t:performance.now()}); if(PINGS.length>12) PINGS.shift(); }
+function ping(wx,wy){ const me=ME(), m={cid:CID,id:uid('g'),x:Math.round(wx),y:Math.round(wy),c:me.color,n:me.name}; pingIn(m); liveOut('ping',m); }
+function drawPointers(now){ const cs=cell();
+  for(let i=PINGS.length-1;i>=0;i--){ const p=PINGS[i], t=(now-p.t)/2800; if(t>1){ PINGS.splice(i,1); continue; } ctx.save(); ctx.globalCompositeOperation='lighter';
+    for(let k=0;k<3;k++){ const tt=(t*2.2-k*.28)%1; if(t*2.2-k*.28<0) continue; const r=cs*(.25+1.5*tt); ctx.globalAlpha=(1-tt)*(1-t*.6); ctx.lineWidth=Math.max(2.5/cam.s,cs*.07)*(1-tt*.5); ctx.strokeStyle=p.c; ctx.beginPath(); ctx.arc(p.x,p.y,r,0,7); ctx.stroke(); }
+    ctx.globalAlpha=1-t*.5; ctx.fillStyle=p.c; ctx.beginPath(); ctx.arc(p.x,p.y,Math.max(4/cam.s,cs*.1),0,7); ctx.fill(); ctx.restore(); label(p.n,p.x,p.y+cs*.3,p.c); }
+  for(const k in PTRS){ const p=PTRS[k], age=now-p.t; if(age>2500){ delete PTRS[k]; continue; } const al=age>1700?1-(age-1700)/800:1, r=Math.max(6/cam.s,cs*.13); ctx.save(); ctx.lineCap='round'; ctx.lineJoin='round';
+    for(let i=1;i<p.tr.length;i++){ const a=p.tr[i-1], b=p.tr[i], f=clamp(1-(now-b[2])/700,0,1); if(f<=0) continue; ctx.globalAlpha=f*.6*al; ctx.strokeStyle=p.c; ctx.lineWidth=r*(.4+1.1*f); ctx.beginPath(); ctx.moveTo(a[0],a[1]); ctx.lineTo(b[0],b[1]); ctx.stroke(); }
+    ctx.globalAlpha=.35*al; ctx.fillStyle=p.c; ctx.beginPath(); ctx.arc(p.x,p.y,r*2.1,0,7); ctx.fill(); ctx.globalAlpha=al; ctx.beginPath(); ctx.arc(p.x,p.y,r,0,7); ctx.fill(); ctx.lineWidth=Math.max(1.5/cam.s,r*.22); ctx.strokeStyle='#fff'; ctx.stroke(); ctx.restore(); if(al>.5) label(p.n,p.x,p.y+r*1.6,p.c); } }
 
 /* ---------- Инструменти и панел ---------- */
 let toastT=null; function toast(m){ const el=document.getElementById('toast'); el.textContent=m; el.classList.add('show'); clearTimeout(toastT); toastT=setTimeout(()=>el.classList.remove('show'),2800); }
 function toggleGrid(){ S.grid=!S.grid; if(!IS_PLAYER) save(); syncTools(); }
 function toggleZones(){ showZones=!showZones; try{ localStorage.setItem(KEY+'_z',showZones?'1':'0'); }catch(e){} syncTools(); }
 function toggleSide(){ document.body.classList.toggle('noside'); if(!userMoved) fit(); }
-function syncTools(){ document.getElementById('bGrid').classList.toggle('on',!!S.grid); document.getElementById('bZones').classList.toggle('on',showZones); }
+function syncTools(){ document.getElementById('bGrid').classList.toggle('on',!!S.grid); document.getElementById('bZones').classList.toggle('on',showZones); document.getElementById('bPtr').classList.toggle('on',TOOL==='ptr'); document.getElementById('bSpell').classList.toggle('on',document.getElementById('spell').classList.contains('show')); cv.classList.toggle('tool',!!TOOL); syncMe(); syncSpellUI(); }
 document.getElementById('bGrid').onclick=toggleGrid; document.getElementById('bZones').onclick=toggleZones; document.getElementById('bFit').onclick=()=>{ resize(); fit(); }; document.getElementById('bSide').onclick=toggleSide; document.getElementById('bUndo').onclick=undo;
 function viewCenter(){ const aw=vw-sideW(); let [x,y]=toWorld(aw/2,vh/2); return [clamp(x,W*.16,W*.84),clamp(y,H*.1,H*.92)]; }
 function addObj(kind){ let [x,y]=viewCenter(); const n=listOf(kind).length; x+=((n%3)-1)*cell()*.9; y+=(Math.floor(n/3)%3-1)*cell()*.9;
